@@ -1,0 +1,6 @@
+-keep class com.novaproject.novai.data.** { *; }
+-keepattributes Signature
+-keepattributes *Annotation*
+-dontwarn okhttp3.**
+-dontwarn okio.**
+-keep class com.google.gson.** { *; }

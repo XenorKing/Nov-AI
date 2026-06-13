@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "591671521449",
+    "project_id": "novai-c6ea6",
+    "storage_bucket": "novai-c6ea6.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:591671521449:android:d9e0b591ee87036460f9b8",
+        "android_client_info": {
+          "package_name": "com.novaproject.novai"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBIHn0n_UQNi3AN9ycCyBoXGP83Z9QANaY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
