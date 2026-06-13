@@ -456,18 +456,50 @@ fun ConversationItem(
     var renameText by remember(conv.title) { mutableStateOf(conv.title) }
 
     val dismissState = rememberSwipeToDismissBoxState(
-        confirmValueChange = { v -> if (v == SwipeToDismissBoxValue.EndToStart) { onDelete(); true } else false }
+        confirmValueChange = { v ->
+            when (v) {
+                SwipeToDismissBoxValue.EndToStart -> { onDelete(); true }
+                SwipeToDismissBoxValue.StartToEnd -> { onTogglePin(); false }
+                else -> false
+            }
+        }
     )
 
     // Outer Box so action buttons can float ABOVE the SwipeToDismissBox (no gesture conflict)
     Box(modifier = Modifier.fillMaxWidth()) {
         SwipeToDismissBox(
             state = dismissState,
-            enableDismissFromStartToEnd = false,
+            enableDismissFromStartToEnd = true,
             backgroundContent = {
-                Box(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 4.dp)
-                    .clip(RoundedCornerShape(16.dp)).background(ErrorRed), contentAlignment = Alignment.CenterEnd) {
-                    Icon(Icons.Default.Delete, "Удалить", tint = Color.White, modifier = Modifier.padding(end = 20.dp))
+                val isPinSwipe = dismissState.targetValue == SwipeToDismissBoxValue.StartToEnd
+                val isDeleteSwipe = dismissState.targetValue == SwipeToDismissBoxValue.EndToStart
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(
+                            when {
+                                isPinSwipe -> accent
+                                isDeleteSwipe -> ErrorRed
+                                else -> Color.Transparent
+                            }
+                        ),
+                    contentAlignment = if (isPinSwipe) Alignment.CenterStart else Alignment.CenterEnd
+                ) {
+                    when {
+                        isPinSwipe -> Icon(
+                            Icons.Default.PushPin,
+                            contentDescription = if (conv.isPinned) "Открепить" else "Закрепить",
+                            tint = Color.White,
+                            modifier = Modifier.padding(start = 20.dp)
+                        )
+                        isDeleteSwipe -> Icon(
+                            Icons.Default.Delete, "Удалить",
+                            tint = Color.White,
+                            modifier = Modifier.padding(end = 20.dp)
+                        )
+                    }
                 }
             }
         ) {
