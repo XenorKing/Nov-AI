@@ -30,6 +30,8 @@ data class AISettings(
     val systemPromptOverride: String = "",
     val customModel: String = "",
     val customModels: List<String> = emptyList(),
+    /** Excluded from Firestore — stored locally in EncryptedSharedPreferences (see TokenSecureStore). */
+    @get:com.google.firebase.firestore.Exclude
     val openRouterToken: String = "",
     val aiName: String = "NovAI",
     val aiAvatarEmoji: String = "🤖",

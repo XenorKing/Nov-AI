@@ -1,0 +1,1 @@
+- [Nov-AI real project path](nov-ai-project.md) — real Android project is at nov-ai-repo/nov-ai-repo/, not nov-ai-repo/app/ (partial copy)

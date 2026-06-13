@@ -16,6 +16,7 @@ import com.novaproject.novai.data.model.Message
 import com.novaproject.novai.data.model.MessageSearchResult
 import com.novaproject.novai.data.model.ModelTokenStats
 import com.novaproject.novai.data.model.UserStats
+import com.novaproject.novai.util.TokenSecureStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
@@ -44,7 +45,9 @@ class ChatRepository @Inject constructor(
     private val auth: FirebaseAuth,
     private val firestore: FirebaseFirestore,
     private val httpClient: OkHttpClient,
-    private val gson: Gson
+    private val gson: Gson,
+    // Vuln-2: token is kept in EncryptedSharedPreferences, never in Firestore.
+    private val tokenStore: TokenSecureStore
 ) {
     private val uid get() = auth.currentUser?.uid
 
@@ -119,7 +122,23 @@ class ChatRepository @Inject constructor(
             firestoreListener?.remove()
             firestoreListener = settingsRef(userId).addSnapshotListener { snap, err ->
                 if (err != null) return@addSnapshotListener
-                trySend(snap?.toObject(AISettings::class.java) ?: AISettings())
+                // Vuln-2: openRouterToken has @Exclude so Firestore won't write/read it;
+                // merge the locally-stored token back into the settings object.
+                val base = snap?.toObject(AISettings::class.java) ?: AISettings()
+
+                // One-time migration: recover legacy token stored in Firestore before this fix.
+                // On first run after upgrade, local token is empty but Firestore still has the
+                // old plaintext value — move it to EncryptedSharedPreferences and delete from cloud.
+                if (tokenStore.getToken().isEmpty()) {
+                    val legacyToken = snap?.getString("openRouterToken").orEmpty()
+                    if (legacyToken.isNotEmpty()) {
+                        tokenStore.saveToken(legacyToken)
+                        snap?.reference?.update("openRouterToken",
+                            com.google.firebase.firestore.FieldValue.delete())
+                    }
+                }
+
+                trySend(base.copy(openRouterToken = tokenStore.getToken()))
             }
         }
 
@@ -336,6 +355,13 @@ class ChatRepository @Inject constructor(
                     synchronized(responseCache) { responseCache[requestJson] = extracted }
                     extracted
                 } else {
+                    // Bug-3: streaming responses carry no usage object in SSE chunks.
+                    // Estimate token counts so stats stay populated for streaming users.
+                    // Rule of thumb: ~4 chars ≈ 1 token (BPE average for mixed text/code).
+                    val estCompletion = (responseText.length / 4).toLong().coerceAtLeast(1L)
+                    val estPrompt = (apiMessages.sumOf { (it["content"] ?: "").length } / 4).toLong()
+                    val estTotal = estPrompt + estCompletion
+                    try { saveTokenUsage(userId, modelId, estPrompt, estCompletion, estTotal) } catch (_: Exception) {}
                     responseText
                 }
             } catch (e: IOException) {
@@ -364,12 +390,19 @@ class ChatRepository @Inject constructor(
 
     suspend fun getSettings(): AISettings {
         val userId = uid ?: return AISettings()
-        return try { settingsRef(userId).get().await().toObject(AISettings::class.java) ?: AISettings() }
+        return try {
+            val base = settingsRef(userId).get().await().toObject(AISettings::class.java) ?: AISettings()
+            // Vuln-2: merge token from local secure storage
+            base.copy(openRouterToken = tokenStore.getToken())
+        }
         catch (_: Exception) { AISettings() }
     }
 
     suspend fun saveSettings(settings: AISettings) {
         val userId = uid ?: error("Не авторизован")
+        // Vuln-2: persist the token locally (encrypted), not in Firestore.
+        // @get:Exclude on AISettings.openRouterToken prevents Firestore from writing the field.
+        tokenStore.saveToken(settings.openRouterToken)
         settingsRef(userId).set(settings).await()
     }
 

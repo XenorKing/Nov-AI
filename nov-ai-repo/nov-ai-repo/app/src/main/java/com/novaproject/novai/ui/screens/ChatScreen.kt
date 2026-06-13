@@ -231,6 +231,35 @@ fun ChatScreen(
                     }
                 }
 
+                // Bug-5: AI context is capped at the last 20 messages (see ChatRepository.sendMessage).
+                // Show an informational banner when the conversation exceeds that limit.
+                if (state.messages.size > 20) {
+                    item(key = "context_limit_banner") {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(accent.copy(alpha = 0.08f))
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Info,
+                                contentDescription = null,
+                                tint = accent,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Text(
+                                "ИИ видит только последние 20 сообщений из этого диалога",
+                                color = accent,
+                                fontSize = 11.sp,
+                                lineHeight = 15.sp
+                            )
+                        }
+                    }
+                }
+
                 if (state.messages.isEmpty() && !state.hasMoreMessages) {
                     item {
                         Box(modifier = Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {

@@ -87,6 +87,9 @@ class ChatViewModel @Inject constructor(
                         convsJob?.cancel(); settingsJob?.cancel()
                         _convState.value = ConversationsUiState()
                         currentSettings = AISettings()
+                        // Vuln-3: clear HTTP response cache on logout so cached AI
+                        // replies from one account are never served to another.
+                        repo.clearCache()
                     }
                 }
         }
@@ -187,6 +190,9 @@ class ChatViewModel @Inject constructor(
             return
         }
         searchJob = viewModelScope.launch {
+            // Bug-4: debounce — wait 300 ms after the user stops typing before
+            // hitting Firestore, so each keystroke doesn't spawn a full scan.
+            kotlinx.coroutines.delay(300)
             _searchState.value = _searchState.value.copy(isSearching = true)
             val results = repo.searchMessages(query)
             _searchState.value = _searchState.value.copy(isSearching = false, messageResults = results)
