@@ -100,7 +100,15 @@ class ChatViewModel @Inject constructor(
         convsJob = viewModelScope.launch {
             try {
                 repo.conversationsFlow().collect { convs ->
-                    _convState.value = _convState.value.copy(conversations = convs, error = null)
+                    // Merge in-memory pin states to guard against the race where
+                    // the Firestore listener fires before a pinConversation write
+                    // has been confirmed, which would silently drop a pin.
+                    val pendingPins = _convState.value.conversations
+                        .filter { it.isPinned }.map { it.id }.toSet()
+                    val merged = convs.map { c ->
+                        if (!c.isPinned && c.id in pendingPins) c.copy(isPinned = true) else c
+                    }
+                    _convState.value = _convState.value.copy(conversations = merged, error = null)
                 }
             } catch (e: Exception) {
                 val msg = e.message ?: "Ошибка загрузки"
