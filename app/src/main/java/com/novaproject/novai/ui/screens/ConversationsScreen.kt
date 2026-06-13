@@ -533,8 +533,8 @@ fun ConversationItem(
                             }
                         }
                     }
-                    // Reserve space so content doesn't slide under floating buttons
-                    Spacer(Modifier.width(78.dp))
+                    // Reserve space so content doesn't slide under the floating edit button
+                    Spacer(Modifier.width(40.dp))
                 }
             }
         }
@@ -548,22 +548,11 @@ fun ConversationItem(
         ) {
             Text(formatRelativeTime(conv.updatedAt), color = NovTextSecondary, fontSize = 11.sp)
             Spacer(Modifier.height(4.dp))
-            Row {
-                Box(
-                    modifier = Modifier.size(32.dp).clip(CircleShape).clickable { onTogglePin() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Default.PushPin,
-                        contentDescription = if (conv.isPinned) "Открепить" else "Закрепить",
-                        tint = if (conv.isPinned) accent else NovTextSecondary.copy(0.45f),
-                        modifier = Modifier.size(14.dp))
-                }
-                Box(
-                    modifier = Modifier.size(32.dp).clip(CircleShape).clickable { renameText = conv.title; showRenameDialog = true },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Default.Edit, "Переименовать", tint = NovTextSecondary.copy(0.4f), modifier = Modifier.size(14.dp))
-                }
+            Box(
+                modifier = Modifier.size(32.dp).clip(CircleShape).clickable { renameText = conv.title; showRenameDialog = true },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Default.Edit, "Переименовать", tint = NovTextSecondary.copy(0.4f), modifier = Modifier.size(14.dp))
             }
         }
     }
