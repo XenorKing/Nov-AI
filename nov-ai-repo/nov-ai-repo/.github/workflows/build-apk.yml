@@ -38,7 +38,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: NovAI-release
-          path: app/build/outputs/apk/release/app-release.apk
+          # Gradle outputs app-release-unsigned.apk when no signing config is set.
+          # The wildcard matches both signed and unsigned variants.
+          path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
 
       - name: Upload Debug APK
