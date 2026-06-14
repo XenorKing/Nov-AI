@@ -51,6 +51,7 @@ class SettingsViewModel @Inject constructor(
     fun updateTopP(v: Float) = update { copy(topP = v) }
     fun updateFrequencyPenalty(v: Float) = update { copy(frequencyPenalty = v) }
     fun updatePresencePenalty(v: Float) = update { copy(presencePenalty = v) }
+    fun updateSendHistory(v: Boolean) = update { copy(sendHistory = v) }
     fun updateSystemPromptOverride(v: String) = update { copy(systemPromptOverride = v) }
     fun updateCustomModel(v: String) = update { copy(customModel = v) }
     fun updateOpenRouterToken(v: String) = update { copy(openRouterToken = v) }
