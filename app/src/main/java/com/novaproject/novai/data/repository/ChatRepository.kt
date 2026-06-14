@@ -244,7 +244,10 @@ class ChatRepository @Inject constructor(
         }
         if (systemContent != null) apiMessages.add(mapOf("role" to "system", "content" to systemContent))
 
-        history.takeLast(20).forEach { apiMessages.add(mapOf("role" to it.role, "content" to it.content)) }
+        // Respect the "send history" toggle — disabled saves tokens by sending only the current message.
+        if (settings.sendHistory) {
+            history.takeLast(20).forEach { apiMessages.add(mapOf("role" to it.role, "content" to it.content)) }
+        }
         apiMessages.add(mapOf("role" to "user", "content" to userText))
 
         val useStreaming = onChunk != null && settings.openRouterToken.isNotBlank()
@@ -338,18 +341,27 @@ class ChatRepository @Inject constructor(
                     } catch (_: Exception) {}
 
                     val extracted: String = run {
-                        try {
+                        // 1. Standard OpenAI chat completion format
+                        runCatching {
                             gson.fromJson(responseText, ChatResponse::class.java)
                                 ?.choices?.firstOrNull()?.message
                                 ?.get("content")?.takeIf { !it.isJsonNull }?.asString
-                        } catch (_: Exception) { null }
+                        }.getOrNull()
                             ?: try {
                                 val obj = com.google.gson.JsonParser.parseString(responseText).asJsonObject
+                                // 2. If server returned an error object, surface its message directly
+                                val errNode = obj.get("error")
+                                if (errNode != null && !errNode.isJsonNull) {
+                                    val msg = if (errNode.isJsonPrimitive) errNode.asString
+                                        else runCatching { errNode.asJsonObject.get("message")?.asString }.getOrNull()
+                                    throw Exception(msg?.takeIf { it.isNotBlank() } ?: "Ошибка API сервера")
+                                }
+                                // 3. Fallback: look for common top-level content fields
                                 listOf("content", "text", "reply", "response", "message")
                                     .firstNotNullOfOrNull { k ->
                                         obj.get(k)?.takeIf { !it.isJsonNull && it.isJsonPrimitive }?.asString
                                     }
-                            } catch (_: Exception) { null }
+                            } catch (e: Exception) { throw e }
                             ?: throw Exception("Ошибка получения ответа. Попробуйте ещё раз.")
                     }
                     synchronized(responseCache) { responseCache[requestJson] = extracted }
