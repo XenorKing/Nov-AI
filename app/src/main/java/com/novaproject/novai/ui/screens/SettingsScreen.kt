@@ -391,9 +391,31 @@ fun SettingsScreen(
                     HorizontalDivider(color = NovDivider)
                     SliderParam("Top-P", "Ограничение вероятности токенов", settings.topP, "%.2f".format(settings.topP), 0f, 1f, 19, "0.0", "1.0", accent) { viewModel.updateTopP(it) }
                     HorizontalDivider(color = NovDivider)
-                    SliderParam("Штраф за повторы", "Frequency Penalty", settings.frequencyPenalty, "%.1f".format(settings.frequencyPenalty), 0f, 2f, 19, "0.0", "2.0", accent) { viewModel.updateFrequencyPenalty(it) }
+                    SliderParam("Штраф за повторы", "Снижает повторение одних и тех же слов", settings.frequencyPenalty, "%.1f".format(settings.frequencyPenalty), 0f, 2f, 19, "0.0", "2.0", accent) { viewModel.updateFrequencyPenalty(it) }
                     HorizontalDivider(color = NovDivider)
-                    SliderParam("Штраф за присутствие", "Presence Penalty", settings.presencePenalty, "%.1f".format(settings.presencePenalty), 0f, 2f, 19, "0.0", "2.0", accent) { viewModel.updatePresencePenalty(it) }
+                    SliderParam("Штраф за присутствие", "Стимулирует говорить о новых темах", settings.presencePenalty, "%.1f".format(settings.presencePenalty), 0f, 2f, 19, "0.0", "2.0", accent) { viewModel.updatePresencePenalty(it) }
+                    HorizontalDivider(color = NovDivider)
+                    // History toggle
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Хранение истории диалога", color = NovTextPrimary, fontWeight = FontWeight.Medium, fontSize = 14.sp)
+                            Text("Экономия токенов модели", color = NovTextSecondary, fontSize = 11.sp)
+                        }
+                        Switch(
+                            checked = settings.sendHistory,
+                            onCheckedChange = { viewModel.updateSendHistory(it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = NovDark,
+                                checkedTrackColor = accent,
+                                uncheckedThumbColor = NovTextSecondary,
+                                uncheckedTrackColor = NovDivider
+                            )
+                        )
+                    }
                 }
             }
 
