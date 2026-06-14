@@ -342,10 +342,19 @@ class ChatRepository @Inject constructor(
 
                     val extracted: String = run {
                         // 1. Standard OpenAI chat completion format
+                        // For reasoning models (e.g. nex-agi/nex-n2-pro) content may be
+                        // null/empty while the actual reply lives in the "reasoning" field.
+                        // We try content first, then fall back to reasoning.
                         runCatching {
                             gson.fromJson(responseText, ChatResponse::class.java)
-                                ?.choices?.firstOrNull()?.message
-                                ?.get("content")?.takeIf { !it.isJsonNull }?.asString
+                                ?.choices?.firstOrNull()?.message?.let { msg ->
+                                    msg.get("content")
+                                        ?.takeIf { !it.isJsonNull }?.asString
+                                        ?.takeIf { it.isNotBlank() }
+                                        ?: msg.get("reasoning")
+                                            ?.takeIf { !it.isJsonNull }?.asString
+                                            ?.trim()?.takeIf { it.isNotBlank() }
+                                }
                         }.getOrNull()
                             ?: try {
                                 val obj = com.google.gson.JsonParser.parseString(responseText).asJsonObject
