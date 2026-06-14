@@ -27,6 +27,8 @@ data class AISettings(
     val topP: Float = 1.0f,
     val frequencyPenalty: Float = 0.0f,
     val presencePenalty: Float = 0.0f,
+    /** When false the chat history is NOT sent with each request — saves tokens at the cost of context. */
+    val sendHistory: Boolean = true,
     val systemPromptOverride: String = "",
     val customModel: String = "",
     val customModels: List<String> = emptyList(),
