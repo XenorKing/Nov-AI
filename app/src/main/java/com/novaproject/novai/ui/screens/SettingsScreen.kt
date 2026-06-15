@@ -74,14 +74,14 @@ fun SettingsScreen(
     var newModelInput by remember { mutableStateOf("") }
     val accent = LocalAccentColor.current
     val context = LocalContext.current
-      var notifGranted by remember {
-          mutableStateOf(
-              if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
-                  ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
-              else true
-          )
-      }
-      
+    var notifGranted by remember {
+        mutableStateOf(
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+            else true
+        )
+    }
+    
     // Warning when any paid custom model is added but token is missing
     val hasPaidModel = settings.customModels.any { !it.endsWith(":free") }
     val needsTokenWarning = hasPaidModel && settings.openRouterToken.isBlank()
