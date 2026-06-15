@@ -214,8 +214,7 @@ package com.novaproject.novai.ui.screens
           Text("Настройте ИИ", color = NovTextPrimary, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center)
           Spacer(Modifier.height(8.dp))
           Text(
-              "Задайте параметры по вкусу —
-изменить можно в любой момент в настройках",
+              "Задайте параметры по вкусу — изменить можно в любой момент в настройках",
               color = NovTextSecondary, fontSize = 14.sp, textAlign = TextAlign.Center, lineHeight = 20.sp
           )
 
