@@ -279,10 +279,13 @@ fun ChatScreen(
                     }
                 } else {
                     items(state.messages, key = { it.id }) { msg ->
+                        val lastAiMsg = if (!state.isSending) state.messages.lastOrNull { it.role == "assistant" } else null
                         MessageBubble(
                             msg = msg, accent = accent,
                             onEdit = if (msg.role == "user") {{ editingMessage = msg; input = msg.content }} else null,
                             onReaction = { isThumbsUp -> viewModel.addReaction(convId, msg.id, isThumbsUp) }
+                            isLast = msg.id == lastAiMsg?.id,
+                            onRegenerate = if (msg.id == lastAiMsg?.id) {{ viewModel.regenerateLastResponse() }} else null,
                         )
                     }
                 }
@@ -498,6 +501,7 @@ private fun StreamingBubble(content: String, accent: androidx.compose.ui.graphic
 @Composable
 fun MessageBubble(
     msg: Message,
+    isLast: Boolean = false,
     accent: androidx.compose.ui.graphics.Color = LocalAccentColor.current,
     onEdit: (() -> Unit)? = null,
     onReaction: ((Boolean) -> Unit)? = null
@@ -538,7 +542,7 @@ fun MessageBubble(
             }
         }
 
-        // Inline 👍 👎 buttons below AI messages
+        // ── Action row ──────────────────────────────────────────────────────────
         if (!isUser) {
             Spacer(Modifier.height(4.dp))
             Row(
@@ -546,30 +550,45 @@ fun MessageBubble(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(2.dp)
             ) {
+                // Copy
+                IconButton(onClick = { clipboardManager.setText(AnnotatedString(msg.content)) }, modifier = Modifier.size(30.dp)) {
+                    Icon(Icons.Default.ContentCopy, "Копировать",
+                        tint = NovTextSecondary.copy(0.55f), modifier = Modifier.size(14.dp))
+                }
+                // Thumbs up — colour only, no count
                 IconButton(onClick = { onReaction?.invoke(true) }, modifier = Modifier.size(30.dp)) {
                     Icon(Icons.Default.ThumbUp, "Нравится",
-                        tint = if (msg.thumbsUp > 0) accent else NovTextSecondary.copy(0.6f),
-                        modifier = Modifier.size(15.dp))
+                        tint = if (msg.thumbsUp > 0) accent else NovTextSecondary.copy(0.55f),
+                        modifier = Modifier.size(14.dp))
                 }
-                if (msg.thumbsUp > 0) {
-                    Text("${msg.thumbsUp}", color = accent, fontSize = 11.sp, fontWeight = FontWeight.Medium)
-                    Spacer(Modifier.width(4.dp))
-                }
+                // Thumbs down — colour only, no count
                 IconButton(onClick = { onReaction?.invoke(false) }, modifier = Modifier.size(30.dp)) {
                     Icon(Icons.Default.ThumbDown, "Не нравится",
-                        tint = if (msg.thumbsDown > 0) ErrorRed else NovTextSecondary.copy(0.6f),
-                        modifier = Modifier.size(15.dp))
+                        tint = if (msg.thumbsDown > 0) ErrorRed else NovTextSecondary.copy(0.55f),
+                        modifier = Modifier.size(14.dp))
                 }
-                if (msg.thumbsDown > 0) {
-                    Text("${msg.thumbsDown}", color = ErrorRed, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                // Regenerate — only under the last AI message
+                if (isLast && onRegenerate != null) {
+                    IconButton(onClick = onRegenerate, modifier = Modifier.size(30.dp)) {
+                        Icon(Icons.Default.Refresh, "Повторить",
+                            tint = NovTextSecondary.copy(0.55f), modifier = Modifier.size(14.dp))
+                    }
+                }
+            }
+        } else {
+            // Pencil edit button below user messages
+            if (onEdit != null) {
+                Spacer(Modifier.height(2.dp))
+                Row(modifier = Modifier.padding(end = 4.dp)) {
+                    IconButton(onClick = onEdit, modifier = Modifier.size(28.dp)) {
+                        Icon(Icons.Default.Edit, "Редактировать",
+                            tint = NovTextSecondary.copy(0.45f), modifier = Modifier.size(13.dp))
+                    }
                 }
             }
         }
     }
 }
-
-@Composable
-fun TypingIndicator(aiName: String = "NovAI", accent: androidx.compose.ui.graphics.Color = LocalAccentColor.current) {
     var dots by remember { mutableStateOf(1) }
     LaunchedEffect(Unit) { while (true) { delay(500); dots = if (dots >= 3) 1 else dots + 1 } }
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -615,3 +634,4 @@ private fun SuggestionChips(suggestions: List<String>, onSelect: (String) -> Uni
         }
     }
 }
+    onRegenerate: (() -> Unit)? = null
