@@ -68,7 +68,6 @@ fun ConversationsScreen(
 
     val firebaseUser = remember { com.google.firebase.auth.FirebaseAuth.getInstance().currentUser }
     val userName = firebaseUser?.displayName?.takeIf { it.isNotBlank() } ?: "Пользователь"
-    val userInitial = userName.firstOrNull()?.uppercaseChar()?.toString() ?: "П"
 
     // Propagate search query to ViewModel for full-text search
     LaunchedEffect(searchQuery) { viewModel.searchMessages(searchQuery) }
