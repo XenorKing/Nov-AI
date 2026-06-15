@@ -247,6 +247,30 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+
+      fun regenerateLastResponse() {
+          val convId = currentConvId ?: return
+          if (_chatState.value.isSending) return
+          val messages = _chatState.value.messages
+          val lastAiIdx = messages.indexOfLast { it.role == "assistant" }
+          if (lastAiIdx < 0) return
+          val lastUserIdx = messages.subList(0, lastAiIdx).indexOfLast { it.role == "user" }
+          if (lastUserIdx < 0) return
+          val lastUserMsg = messages[lastUserIdx]
+          val historyBefore = if (lastUserIdx > 0) messages.subList(0, lastUserIdx) else emptyList()
+          viewModelScope.launch {
+              _chatState.value = _chatState.value.copy(isSending = true, error = null, streamingContent = "")
+              try {
+                  repo.editMessage(convId, lastUserMsg.id, lastUserMsg.content, historyBefore, currentSettings) { chunk ->
+                      _chatState.update { it.copy(streamingContent = it.streamingContent + chunk) }
+                  }
+                  _chatState.value = _chatState.value.copy(isSending = false, streamingContent = "")
+              } catch (e: Exception) {
+                  _chatState.value = _chatState.value.copy(isSending = false, streamingContent = "", error = e.message ?: "Ошибка")
+              }
+          }
+      }
+  
     fun editMessage(fromMessageId: String, newText: String) {
         val convId = currentConvId ?: return
         if (newText.isBlank() || _chatState.value.isSending) return
