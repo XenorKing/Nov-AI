@@ -169,7 +169,7 @@ fun ChatScreen(
                                     Text(opt.description, color = NovTextSecondary, fontSize = 11.sp)
                                 }
                             },
-                            leadingIcon = if (isCurrent) { Icon(Icons.Default.Check, null, tint = accent, modifier = Modifier.size(16.dp)) } else null,
+                            leadingIcon = if (isCurrent) { { Icon(Icons.Default.Check, null, tint = accent, modifier = Modifier.size(16.dp)) } } else null,
                             onClick = { viewModel.switchModel(opt.modelId); showModelDropdown = false }
                         )
                         if (opt != allModelOptions.last()) HorizontalDivider(color = NovDivider.copy(0.5f), modifier = Modifier.padding(horizontal = 8.dp))
@@ -282,10 +282,10 @@ fun ChatScreen(
                         val lastAiMsg = if (!state.isSending) state.messages.lastOrNull { it.role == "assistant" } else null
                         MessageBubble(
                             msg = msg, accent = accent,
-                            onEdit = if (msg.role == "user") { editingMessage = msg; input = msg.content } else null,
+                            onEdit = if (msg.role == "user") { { editingMessage = msg; input = msg.content } } else null,
                             onReaction = { isThumbsUp -> viewModel.addReaction(convId, msg.id, isThumbsUp) },
                             isLast = msg.id == lastAiMsg?.id,
-                            onRegenerate = if (msg.id == lastAiMsg?.id) { viewModel.regenerateLastResponse() } else null,
+                            onRegenerate = if (msg.id == lastAiMsg?.id) { { viewModel.regenerateLastResponse() } } else null,
                         )
                     }
                 }
