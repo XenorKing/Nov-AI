@@ -37,6 +37,15 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+import android.provider.Settings
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.NotificationsOff
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import com.novaproject.novai.R
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
@@ -64,7 +73,15 @@ fun SettingsScreen(
     var tokenVisible by remember { mutableStateOf(false) }
     var newModelInput by remember { mutableStateOf("") }
     val accent = LocalAccentColor.current
-
+    val context = LocalContext.current
+      var notifGranted by remember {
+          mutableStateOf(
+              if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+                  ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+              else true
+          )
+      }
+      
     // Warning when any paid custom model is added but token is missing
     val hasPaidModel = settings.customModels.any { !it.endsWith(":free") }
     val needsTokenWarning = hasPaidModel && settings.openRouterToken.isBlank()
@@ -436,7 +453,55 @@ fun SettingsScreen(
                 }
             }
 
-            Card(onClick = onPrivacyPolicy, colors = CardDefaults.cardColors(containerColor = NovCard), shape = RoundedCornerShape(14.dp)) {
+            // ── Notification settings ──────────────────────────────────────────────
+              Card(
+                  onClick = {
+                      val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                          Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                              putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                          }
+                      } else {
+                          Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                              data = android.net.Uri.parse("package:" + context.packageName)
+                          }
+                      }
+                      context.startActivity(intent)
+                      // re-check after returning
+                      notifGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+                          ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+                      else true
+                  },
+                  colors = CardDefaults.cardColors(containerColor = NovCard),
+                  shape = RoundedCornerShape(14.dp)
+              ) {
+                  Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                      Box(
+                          modifier = Modifier.size(36.dp).clip(RoundedCornerShape(10.dp))
+                              .background(if (notifGranted) accent.copy(0.12f) else NovTextSecondary.copy(0.12f)),
+                          contentAlignment = Alignment.Center
+                      ) {
+                          Icon(
+                              if (notifGranted) Icons.Default.Notifications else Icons.Default.NotificationsOff,
+                              null,
+                              tint = if (notifGranted) accent else NovTextSecondary,
+                              modifier = Modifier.size(18.dp)
+                          )
+                      }
+                      Spacer(Modifier.width(12.dp))
+                      Column {
+                          Text("Уведомления", color = NovTextPrimary, fontWeight = FontWeight.Medium, fontSize = 14.sp)
+                          Text(
+                              if (notifGranted) "Включены — нажмите, чтобы изменить" else "Выключены — нажмите, чтобы разрешить",
+                              color = if (notifGranted) NovTextSecondary else accent,
+                              fontSize = 11.sp
+                          )
+                      }
+                      Spacer(Modifier.weight(1f))
+                      Text("›", color = NovTextSecondary, fontSize = 20.sp)
+                  }
+              }
+
+                          Card(onClick = onPrivacyPolicy, colors = CardDefaults.cardColors(containerColor = NovCard), shape = RoundedCornerShape(14.dp)) {
                 Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(modifier = Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(accent.copy(0.12f)), contentAlignment = Alignment.Center) {
                         Icon(Icons.Default.Policy, null, tint = accent, modifier = Modifier.size(18.dp))
