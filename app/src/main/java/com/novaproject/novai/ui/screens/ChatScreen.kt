@@ -590,6 +590,11 @@ fun MessageBubble(
         }
     }
 }
+
+// ── Typing indicator bubble ────────────────────────────────────────────────
+
+@Composable
+private fun TypingIndicator(aiName: String, accent: androidx.compose.ui.graphics.Color) {
     var dots by remember { mutableStateOf(1) }
     LaunchedEffect(Unit) { while (true) { delay(500); dots = if (dots >= 3) 1 else dots + 1 } }
     Row(verticalAlignment = Alignment.CenterVertically) {
