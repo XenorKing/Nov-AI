@@ -257,7 +257,7 @@ package com.novaproject.novai.data.repository
           }
           apiMessages.add(mapOf("role" to "user", "content" to userText))
 
-          val useStreaming = onChunk != null && settings.openRouterToken.isNotBlank()
+          val useStreaming = onChunk != null
 
           val chatRequest = ChatRequest(
               model = modelId, messages = apiMessages,
@@ -285,7 +285,9 @@ package com.novaproject.novai.data.repository
                   .apply { if (useStreaming) addHeader("Accept", "text/event-stream") }
                   .build()
           } else {
-              Request.Builder().url(WORKER_URL).post(reqBody).build()
+              Request.Builder().url(WORKER_URL).post(reqBody)
+                  .apply { if (useStreaming) addHeader("Accept", "text/event-stream") }
+                  .build()
           }
 
           val reply: String = withContext(Dispatchers.IO) {
