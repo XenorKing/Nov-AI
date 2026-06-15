@@ -504,7 +504,8 @@ fun MessageBubble(
     isLast: Boolean = false,
     accent: androidx.compose.ui.graphics.Color = LocalAccentColor.current,
     onEdit: (() -> Unit)? = null,
-    onReaction: ((Boolean) -> Unit)? = null
+    onReaction: ((Boolean) -> Unit)? = null,
+    onRegenerate: (() -> Unit)? = null
 ) {
     val isUser = msg.role == "user"
     var showMenu by remember { mutableStateOf(false) }
@@ -634,4 +635,3 @@ private fun SuggestionChips(suggestions: List<String>, onSelect: (String) -> Uni
         }
     }
 }
-    onRegenerate: (() -> Unit)? = null
