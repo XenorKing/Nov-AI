@@ -283,7 +283,7 @@ fun ChatScreen(
                         MessageBubble(
                             msg = msg, accent = accent,
                             onEdit = if (msg.role == "user") {{ editingMessage = msg; input = msg.content }} else null,
-                            onReaction = { isThumbsUp -> viewModel.addReaction(convId, msg.id, isThumbsUp) }
+                            onReaction = { isThumbsUp -> viewModel.addReaction(convId, msg.id, isThumbsUp) },
                             isLast = msg.id == lastAiMsg?.id,
                             onRegenerate = if (msg.id == lastAiMsg?.id) {{ viewModel.regenerateLastResponse() }} else null,
                         )
