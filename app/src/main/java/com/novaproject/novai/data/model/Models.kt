@@ -85,11 +85,11 @@ data class MessageSearchResult(
 data class FreeModel(val label: String, val modelId: String, val description: String)
 
 val FREE_MODEL_LIST = listOf(
-    FreeModel("NovAI",          "",                                               "Быстрый · рус, en, код · по умолчанию"),
-    FreeModel("Llama 3.1 8B",   "meta-llama/llama-3.1-8b-instruct:free",         "Универсальный · Meta AI · рус, en, код"),
-    FreeModel("Mistral 7B",     "mistralai/mistral-7b-instruct:free",             "Лёгкий и быстрый · Mistral AI · en, код"),
-    FreeModel("Gemma 3 12B",    "google/gemma-3-12b-it:free",                     "Умный · Google · en, рус, аналитика"),
-    FreeModel("Qwen 2.5 7B",    "qwen/qwen-2.5-7b-instruct:free",                "Многоязычный · Alibaba · рус, en, код")
+    FreeModel("NovAI",           "",                                                    "Быстрый · рус, en, код · по умолчанию"),
+    FreeModel("Llama 3.3 70B",   "meta-llama/llama-3.3-70b-instruct:free",              "Мощный · Meta AI · рус, en, код"),
+    FreeModel("Llama 3.2 3B",    "meta-llama/llama-3.2-3b-instruct:free",              "Лёгкий и быстрый · Meta AI · en, код"),
+    FreeModel("Gemma 4 31B",     "google/gemma-4-31b-it:free",                          "Умный · Google · en, рус, аналитика"),
+    FreeModel("Qwen3 80B",       "qwen/qwen3-next-80b-a3b-instruct:free",              "Многоязычный · Alibaba · рус, en, код")
 )
 
 /** Friendly display name for a model ID. */
@@ -97,12 +97,16 @@ fun friendlyModelName(modelId: String): String {
     FREE_MODEL_LIST.firstOrNull { it.modelId == modelId }?.let { return it.label }
     return when {
         modelId.isBlank() || modelId.startsWith("nex-agi/nex-n2") -> "NovAI"
+        modelId.contains("llama-3.3-70b") -> "Llama 3.3 70B"
+        modelId.contains("llama-3.2-3b") -> "Llama 3.2 3B"
         modelId.contains("llama-3.1-8b") || modelId.contains("llama-3-8b") -> "Llama 3.1 8B"
         modelId.contains("llama-3.1-70b") -> "Llama 3.1 70B"
         modelId.contains("mistral-7b") -> "Mistral 7B"
         modelId.contains("mistral") -> "Mistral"
+        modelId.contains("gemma-4") -> "Gemma 4"
         modelId.contains("gemma-3-12b") -> "Gemma 3 12B"
         modelId.contains("gemma") -> "Gemma"
+        modelId.contains("qwen3") -> "Qwen3"
         modelId.contains("qwen-2.5-7b") || modelId.contains("qwen2.5-7b") -> "Qwen 2.5 7B"
         modelId.contains("qwen") -> "Qwen"
         modelId.contains("gpt-4o-mini") -> "GPT-4o mini"
