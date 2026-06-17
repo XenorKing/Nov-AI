@@ -143,10 +143,10 @@ package com.novaproject.novai.ui.screens
               contentAlignment = Alignment.Center
           ) {
               Image(
-                  painter = painterResource(R.mipmap.ic_launcher),
+                  painter = painterResource(R.drawable.novai_logo),
                   contentDescription = "NovAI",
                   modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(20.dp)),
-                  contentScale = ContentScale.Fit
+                  contentScale = ContentScale.Crop
               )
           }
 

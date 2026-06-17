@@ -17,7 +17,10 @@ class NovAIApp : Application() {
     override fun onCreate() {
         super.onCreate()
         FirebaseApp.initializeApp(this)
-        FirebaseCrashlytics.getInstance().isCrashlyticsCollectionEnabled = true
+        FirebaseCrashlytics.getInstance().apply {
+            isCrashlyticsCollectionEnabled = true
+            sendUnsentReports()
+        }
         createNotificationChannel()
         subscribeToFcmTopics()
         registerActivityLifecycleCallbacks(AppStateManager)
