@@ -53,7 +53,6 @@ class AuthViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             repo.signIn(email.trim(), password).fold(
                 onSuccess = {
-                    analytics.logLogin()
                     _uiState.value = _uiState.value.copy(isLoading = false)
                 },
                 onFailure = {
@@ -81,7 +80,6 @@ class AuthViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             repo.register(email.trim(), password, name.trim()).fold(
                 onSuccess = {
-                    analytics.logSignUp()
                     _uiState.value = _uiState.value.copy(isLoading = false)
                 },
                 onFailure = {

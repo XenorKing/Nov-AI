@@ -18,7 +18,6 @@ class NovAIApp : Application() {
         super.onCreate()
         FirebaseApp.initializeApp(this)
         FirebaseCrashlytics.getInstance().isCrashlyticsCollectionEnabled = true
-        setupCrashLogger()
         createNotificationChannel()
         subscribeToFcmTopics()
         registerActivityLifecycleCallbacks(AppStateManager)
@@ -45,15 +44,6 @@ class NovAIApp : Application() {
                 if (task.isSuccessful) Log.d(TAG, "FCM subscribed to topic: all_users")
                 else Log.w(TAG, "FCM topic subscription failed", task.exception)
             }
-    }
-
-    private fun setupCrashLogger() {
-        val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
-        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
-            Log.e(TAG, "FATAL CRASH thread=${thread.name}", throwable)
-            try { FirebaseCrashlytics.getInstance().recordException(throwable) } catch (_: Exception) {}
-            defaultHandler?.uncaughtException(thread, throwable)
-        }
     }
 
     companion object {
