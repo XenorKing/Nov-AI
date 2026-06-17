@@ -8,6 +8,7 @@ import com.novaproject.novai.data.model.Message
 import com.novaproject.novai.data.model.MessageSearchResult
 import com.novaproject.novai.data.repository.AuthRepository
 import com.novaproject.novai.data.repository.ChatRepository
+import com.novaproject.novai.data.repository.QuotaInfo
 import com.novaproject.novai.util.AnalyticsHelper
 import com.novaproject.novai.util.CrashlyticsHelper
 import com.novaproject.novai.util.NetworkMonitor
@@ -42,7 +43,12 @@ data class ChatUiState(
     val hasMoreMessages: Boolean = false,
     val isLoadingMore: Boolean = false,
     val streamingContent: String = "",
-    val customModels: List<String> = emptyList()
+    val customModels: List<String> = emptyList(),
+    val quotaUsed: Int? = null,
+    val quotaRemaining: Int? = null,
+    val quotaLimit: Int? = null,
+    val quotaReset: Long? = null,
+    val quotaLimited: Boolean = true
 )
 
 data class SearchUiState(
@@ -159,6 +165,7 @@ class ChatViewModel @Inject constructor(
                 _chatState.value = _chatState.value.copy(error = e.message ?: "Ошибка загрузки")
             }
         }
+        refreshQuota()
     }
 
     fun loadMoreMessages() {
@@ -229,9 +236,12 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             _chatState.value = _chatState.value.copy(isSending = true, error = null, streamingContent = "")
             try {
-                repo.sendMessage(convId, text.trim(), _chatState.value.messages, currentSettings) { chunk ->
+                repo.sendMessage(convId, text.trim(), _chatState.value.messages, currentSettings,
+                onChunk = { chunk ->
                     _chatState.update { it.copy(streamingContent = it.streamingContent + chunk) }
-                }
+                },
+                onQuota = { q -> applyQuota(q) }
+            )
                 analytics.logMessageSent(currentSettings.customModel)
                 _chatState.value = _chatState.value.copy(isSending = false, streamingContent = "")
             } catch (e: Exception) {
@@ -257,9 +267,12 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             _chatState.value = _chatState.value.copy(isSending = true, error = null, streamingContent = "")
             try {
-                repo.editMessage(convId, lastUserMsg.id, lastUserMsg.content, historyBefore, currentSettings) { chunk ->
+                repo.editMessage(convId, lastUserMsg.id, lastUserMsg.content, historyBefore, currentSettings,
+                onChunk = { chunk ->
                     _chatState.update { it.copy(streamingContent = it.streamingContent + chunk) }
-                }
+                },
+                onQuota = { q -> applyQuota(q) }
+            )
                 analytics.logMessageSent(currentSettings.customModel)
                 _chatState.value = _chatState.value.copy(isSending = false, streamingContent = "")
             } catch (e: Exception) {
@@ -277,9 +290,12 @@ class ChatViewModel @Inject constructor(
             try {
                 val idx = _chatState.value.messages.indexOfFirst { it.id == fromMessageId }
                 val before = if (idx > 0) _chatState.value.messages.subList(0, idx) else emptyList()
-                repo.editMessage(convId, fromMessageId, newText.trim(), before, currentSettings) { chunk ->
+                repo.editMessage(convId, fromMessageId, newText.trim(), before, currentSettings,
+                onChunk = { chunk ->
                     _chatState.update { it.copy(streamingContent = it.streamingContent + chunk) }
-                }
+                },
+                onQuota = { q -> applyQuota(q) }
+            )
                 analytics.logMessageSent(currentSettings.customModel)
                 _chatState.value = _chatState.value.copy(isSending = false, streamingContent = "")
             } catch (e: Exception) {
@@ -362,6 +378,25 @@ class ChatViewModel @Inject constructor(
                 _convState.value = _convState.value.copy(error = e.message ?: "Ошибка удаления аккаунта")
             }
         }
+    }
+
+    fun refreshQuota() {
+        viewModelScope.launch {
+            try {
+                val q = repo.fetchQuota() ?: return@launch
+                applyQuota(q)
+            } catch (_: Exception) {}
+        }
+    }
+
+    private fun applyQuota(q: QuotaInfo) {
+        _chatState.update { it.copy(
+            quotaUsed = q.used,
+            quotaRemaining = q.remaining,
+            quotaLimit = q.limit,
+            quotaReset = q.reset,
+            quotaLimited = q.limited
+        )}
     }
 
     fun clearChatError() { _chatState.value = _chatState.value.copy(error = null) }
