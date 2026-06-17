@@ -249,7 +249,8 @@ package com.novaproject.novai.data.repository
           userText: String,
           history: List<Message>,
           settings: AISettings,
-          onChunk: ((String) -> Unit)? = null
+          onChunk: ((String) -> Unit)? = null,
+          onQuota: ((QuotaInfo) -> Unit)? = null
       ): String {
           val userId = uid ?: error("Не авторизован")
 
@@ -455,7 +456,9 @@ package com.novaproject.novai.data.repository
 
       suspend fun editMessage(
           convId: String, fromMessageId: String, newText: String,
-          historyBefore: List<Message>, settings: AISettings, onChunk: ((String) -> Unit)? = null
+          historyBefore: List<Message>, settings: AISettings,
+          onChunk: ((String) -> Unit)? = null,
+          onQuota: ((QuotaInfo) -> Unit)? = null
       ): String {
           val userId = uid ?: error("Не авторизован")
           val allMsgs = msgsRef(userId, convId).orderBy("timestamp").get().await()
