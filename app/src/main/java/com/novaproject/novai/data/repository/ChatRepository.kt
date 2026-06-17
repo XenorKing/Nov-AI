@@ -48,8 +48,18 @@ package com.novaproject.novai.data.repository
   private const val DEFAULT_MODEL_ID  = "nex-agi/nex-n2-pro:free"
   private const val CACHE_MAX_SIZE    = 50
   private const val WORKER_URL        = "https://novai-proxy.xenortvin.workers.dev/chat"
+  private const val WORKER_QUOTA_URL  = "https://novai-proxy.xenortvin.workers.dev/quota"
   private const val OPENROUTER_URL    = "https://openrouter.ai/api/v1/chat/completions"
+  private const val APP_SECRET        = "5a18f0c931fe72e1353f852331295150cddc2358758a23f8069669e99c6d66af"
   const val MESSAGES_PAGE_SIZE        = 50
+
+  data class QuotaInfo(
+      val used: Int,
+      val remaining: Int,
+      val limit: Int,
+      val reset: Long,
+      val limited: Boolean
+  )
 
   @Singleton
   class ChatRepository @Inject constructor(
@@ -289,14 +299,14 @@ package com.novaproject.novai.data.repository
 
           val reqBody = requestJson.toRequestBody("application/json".toMediaType())
           val httpRequest = if (settings.openRouterToken.isNotBlank()) {
-              Request.Builder().url(OPENROUTER_URL).post(reqBody)
-                  .addHeader("Authorization", "Bearer ${settings.openRouterToken}")
-                  .addHeader("HTTP-Referer", "https://novai.app")
-                  .addHeader("X-Title", "NovAI")
+              Request.Builder().url(WORKER_URL).post(reqBody)
+                  .addHeader("X-App-Secret", APP_SECRET)
+                  .addHeader("X-User-Token", settings.openRouterToken)
                   .apply { if (useStreaming) addHeader("Accept", "text/event-stream") }
                   .build()
           } else {
               Request.Builder().url(WORKER_URL).post(reqBody)
+                  .addHeader("X-App-Secret", APP_SECRET)
                   .apply { if (useStreaming) addHeader("Accept", "text/event-stream") }
                   .build()
           }
@@ -329,21 +339,45 @@ package com.novaproject.novai.data.repository
                           }
                           useStreaming -> {
                               val full = StringBuilder()
+                              var lastEventType = ""
                               response.body?.charStream()?.use { reader ->
                                   reader.forEachLine { line ->
-                                      if (!line.startsWith("data:")) return@forEachLine
-                                      val data = line.removePrefix("data:").trim()
-                                      if (data == "[DONE]") return@forEachLine
-                                      try {
-                                          val obj = com.google.gson.JsonParser.parseString(data).asJsonObject
-                                          val chunk = obj.getAsJsonArray("choices")
-                                              ?.firstOrNull()?.asJsonObject
-                                              ?.getAsJsonObject("delta")
-                                              ?.get("content")?.takeIf { !it.isJsonNull }?.asString
-                                              ?: return@forEachLine
-                                          full.append(chunk)
-                                          onChunk?.invoke(chunk)
-                                      } catch (_: Exception) {}
+                                      when {
+                                          line.startsWith("event:") -> {
+                                              lastEventType = line.removePrefix("event:").trim()
+                                          }
+                                          line.startsWith("data:") -> {
+                                              val data = line.removePrefix("data:").trim()
+                                              if (lastEventType == "quota") {
+                                                  lastEventType = ""
+                                                  try {
+                                                      val obj = com.google.gson.JsonParser.parseString(data).asJsonObject
+                                                      val limited = obj.get("limited")?.asBoolean ?: true
+                                                      QuotaInfo(
+                                                          used = if (limited) obj.get("used")?.asInt ?: 0 else 0,
+                                                          remaining = if (limited) obj.get("remaining")?.asInt ?: 0 else Int.MAX_VALUE,
+                                                          limit = if (limited) obj.get("limit")?.asInt ?: 10 else Int.MAX_VALUE,
+                                                          reset = obj.get("reset")?.asLong ?: 0L,
+                                                          limited = limited
+                                                      ).let { onQuota?.invoke(it) }
+                                                  } catch (_: Exception) {}
+                                                  return@forEachLine
+                                              }
+                                              lastEventType = ""
+                                              if (data == "[DONE]") return@forEachLine
+                                              try {
+                                                  val obj = com.google.gson.JsonParser.parseString(data).asJsonObject
+                                                  val chunk = obj.getAsJsonArray("choices")
+                                                      ?.firstOrNull()?.asJsonObject
+                                                      ?.getAsJsonObject("delta")
+                                                      ?.get("content")?.takeIf { !it.isJsonNull }?.asString
+                                                      ?: return@forEachLine
+                                                  full.append(chunk)
+                                                  onChunk?.invoke(chunk)
+                                              } catch (_: Exception) {}
+                                          }
+                                          else -> lastEventType = ""
+                                      }
                                   }
                               }
                               val text = full.toString().trim()
@@ -430,7 +464,30 @@ package com.novaproject.novai.data.repository
               if (doc.id == fromMessageId) deleting = true
               if (deleting) doc.reference.delete().await()
           }
-          return sendMessage(convId, newText, historyBefore, settings, onChunk)
+          return sendMessage(convId, newText, historyBefore, settings, onChunk, onQuota)
+      }
+
+      // ── Quota ─────────────────────────────────────────────────────────────────────
+
+      /** Получает текущую квоту с Worker (вызывать при открытии чата). */
+      suspend fun fetchQuota(): QuotaInfo? = withContext(Dispatchers.IO) {
+          try {
+              val req = Request.Builder()
+                  .url(WORKER_QUOTA_URL)
+                  .addHeader("X-App-Secret", APP_SECRET)
+                  .get().build()
+              val resp = httpClient.newCall(req).execute()
+              if (!resp.isSuccessful) return@withContext null
+              val body = resp.body?.string() ?: return@withContext null
+              val obj = com.google.gson.JsonParser.parseString(body).asJsonObject
+              QuotaInfo(
+                  used      = obj.get("used")?.asInt ?: 0,
+                  remaining = obj.get("remaining")?.asInt ?: 0,
+                  limit     = obj.get("limit")?.asInt ?: 10,
+                  reset     = obj.get("reset")?.asLong ?: 0L,
+                  limited   = obj.get("limited")?.asBoolean ?: true
+              )
+          } catch (_: Exception) { null }
       }
 
       // ── Settings ───────────────────────────────────────────────────────────────
