@@ -313,7 +313,17 @@ package com.novaproject.novai.data.repository
                           code !in 200..299 -> {
                               val body = response.body?.string() ?: ""; response.close()
                               val detail = runCatching {
-                                  gson.fromJson(body, Map::class.java)["error"]?.toString()
+                                  val parsed = com.google.gson.JsonParser.parseString(body).asJsonObject
+                                  val errorEl = parsed.get("error")
+                                  when {
+                                      errorEl == null || errorEl.isJsonNull ->
+                                          parsed.get("message")?.takeIf { !it.isJsonNull }?.asString
+                                      errorEl.isJsonPrimitive -> errorEl.asString
+                                      errorEl.isJsonObject ->
+                                          errorEl.asJsonObject.get("message")
+                                              ?.takeIf { !it.isJsonNull }?.asString
+                                      else -> null
+                                  }
                               }.getOrNull()
                               throw Exception(detail ?: "Ошибка сервера ($code)")
                           }

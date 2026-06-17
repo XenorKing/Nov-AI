@@ -105,8 +105,6 @@ fun ChatScreen(
                 TopAppBar(
                     title = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            AiAvatarSmall(accent = accent)
-                            Spacer(Modifier.width(10.dp))
                             Column {
                                 Text(
                                     if (username.isNotBlank()) username else aiName,
