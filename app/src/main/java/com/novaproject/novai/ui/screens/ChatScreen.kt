@@ -182,6 +182,7 @@ fun ChatScreen(
                 }
 
                 AnimatedGradientBar(accent = accent)
+                QuotaBanner(state = state, accent = accent)
             }
         }
     ) { padding ->
@@ -616,6 +617,57 @@ private fun AnimatedGradientBar(accent: androidx.compose.ui.graphics.Color = Loc
         Brush.linearGradient(listOf(NovPurple, accent, NovPurple, accent),
             start = Offset(animOffset, 0f), end = Offset(animOffset + 500f, 0f))
     ))
+}
+
+
+@Composable
+private fun QuotaBanner(state: com.novaproject.novai.viewmodel.ChatUiState, accent: Color) {
+    if (!state.quotaLimited) return  // user has own token → no limit banner
+    val remaining = state.quotaRemaining ?: return  // quota not loaded yet
+    val limit     = state.quotaLimit ?: 10
+    val used      = state.quotaUsed ?: 0
+    if (used == 0 && remaining == 0) return  // no data at all
+
+    val fraction  = if (limit > 0) used.toFloat() / limit.toFloat() else 0f
+    val isExhausted = remaining <= 0
+
+    val bg    = if (isExhausted) Color(0xFF7C1500) else accent.copy(alpha = 0.10f)
+    val tint  = if (isExhausted) Color(0xFFFF6B4A) else accent
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(bg)
+            .padding(horizontal = 14.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Icon(
+            if (isExhausted) Icons.Default.Block else Icons.Default.DataUsage,
+            contentDescription = null,
+            tint = tint,
+            modifier = Modifier.size(14.dp)
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                if (isExhausted)
+                    "Дневной лимит исчерпан ($limit запросов). Обновится завтра."
+                else
+                    "Запросов сегодня: $used / $limit  (осталось $remaining)",
+                color = tint,
+                fontSize = 11.sp,
+                lineHeight = 14.sp
+            )
+        }
+        if (!isExhausted) {
+            LinearProgressIndicator(
+                progress = { fraction.coerceIn(0f, 1f) },
+                modifier = Modifier.width(60.dp).height(4.dp).clip(RoundedCornerShape(2.dp)),
+                color = tint,
+                trackColor = tint.copy(alpha = 0.2f)
+            )
+        }
+    }
 }
 
 @Composable
