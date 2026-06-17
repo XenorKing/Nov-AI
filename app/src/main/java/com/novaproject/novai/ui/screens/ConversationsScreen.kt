@@ -116,22 +116,7 @@ fun ConversationsScreen(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(onClick = onProfile) {
-                        Box(
-                            modifier = Modifier.size(38.dp).clip(CircleShape)
-                                .background(Brush.linearGradient(listOf(accent.copy(0.25f), NovPurple.copy(0.35f)))),
-                            contentAlignment = Alignment.Center
-                        ) { Icon(Icons.Default.Person, "Профиль", tint = accent, modifier = Modifier.size(20.dp)) }
-                    }
-                    Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier.size(36.dp).clip(CircleShape)
-                                .background(Brush.linearGradient(listOf(accent, NovPurple))),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(userInitial, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                        }
-                        Spacer(Modifier.width(10.dp))
+                    Row(modifier = Modifier.weight(1f).padding(start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column {
                             Text(userName, color = NovTextPrimary, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                             Text("NovAI · ИИ-ассистент", color = NovTextSecondary, fontSize = 11.sp)

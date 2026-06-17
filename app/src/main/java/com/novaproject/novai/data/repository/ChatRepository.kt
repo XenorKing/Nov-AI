@@ -384,7 +384,11 @@ package com.novaproject.novai.data.repository
                                   }
                           }.getOrNull()
                               ?: try {
-                                  val obj = com.google.gson.JsonParser.parseString(responseText).asJsonObject
+                                  val obj = runCatching {
+                                      com.google.gson.JsonParser.parseString(responseText).asJsonObject
+                                  }.getOrElse {
+                                      throw Exception("Ошибка получения ответа. Попробуйте ещё раз.")
+                                  }
                                   val errNode = obj.get("error")
                                   if (errNode != null && !errNode.isJsonNull) {
                                       val msg = if (errNode.isJsonPrimitive) errNode.asString
