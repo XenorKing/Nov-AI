@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseUser
 import com.novaproject.novai.data.repository.AuthRepository
+import com.novaproject.novai.util.AnalyticsHelper
+import com.novaproject.novai.util.CrashlyticsHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,7 +22,9 @@ data class AuthUiState(
 
 @HiltViewModel
 class AuthViewModel @Inject constructor(
-    private val repo: AuthRepository
+    private val repo: AuthRepository,
+    private val analytics: AnalyticsHelper,
+    private val crashlytics: CrashlyticsHelper
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AuthUiState())
@@ -30,6 +34,12 @@ class AuthViewModel @Inject constructor(
         viewModelScope.launch {
             repo.authState.collect { user ->
                 _uiState.value = _uiState.value.copy(user = user)
+                if (user != null) {
+                    crashlytics.setUserId(user.uid)
+                    user.email?.let { crashlytics.setUserEmail(it) }
+                } else {
+                    crashlytics.clearUserId()
+                }
             }
         }
     }
@@ -42,8 +52,14 @@ class AuthViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             repo.signIn(email.trim(), password).fold(
-                onSuccess = { _uiState.value = _uiState.value.copy(isLoading = false) },
-                onFailure = { _uiState.value = _uiState.value.copy(isLoading = false, error = friendlyError(it.message)) }
+                onSuccess = {
+                    analytics.logLogin()
+                    _uiState.value = _uiState.value.copy(isLoading = false)
+                },
+                onFailure = {
+                    crashlytics.recordException("signIn", it)
+                    _uiState.value = _uiState.value.copy(isLoading = false, error = friendlyError(it.message))
+                }
             )
         }
     }
@@ -64,8 +80,14 @@ class AuthViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             repo.register(email.trim(), password, name.trim()).fold(
-                onSuccess = { _uiState.value = _uiState.value.copy(isLoading = false) },
-                onFailure = { _uiState.value = _uiState.value.copy(isLoading = false, error = friendlyError(it.message)) }
+                onSuccess = {
+                    analytics.logSignUp()
+                    _uiState.value = _uiState.value.copy(isLoading = false)
+                },
+                onFailure = {
+                    crashlytics.recordException("register", it)
+                    _uiState.value = _uiState.value.copy(isLoading = false, error = friendlyError(it.message))
+                }
             )
         }
     }
@@ -74,7 +96,10 @@ class AuthViewModel @Inject constructor(
         viewModelScope.launch {
             repo.resetPassword(email).fold(
                 onSuccess = { _uiState.value = _uiState.value.copy(successMessage = "Письмо отправлено на $email") },
-                onFailure = { _uiState.value = _uiState.value.copy(error = friendlyError(it.message)) }
+                onFailure = {
+                    crashlytics.recordException("resetPassword", it)
+                    _uiState.value = _uiState.value.copy(error = friendlyError(it.message))
+                }
             )
         }
     }
@@ -88,7 +113,10 @@ class AuthViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             repo.updateDisplayName(newName.trim()).fold(
                 onSuccess = { _uiState.value = _uiState.value.copy(isLoading = false, successMessage = "Имя обновлено") },
-                onFailure = { _uiState.value = _uiState.value.copy(isLoading = false, error = friendlyError(it.message)) }
+                onFailure = {
+                    crashlytics.recordException("updateDisplayName", it)
+                    _uiState.value = _uiState.value.copy(isLoading = false, error = friendlyError(it.message))
+                }
             )
         }
     }
@@ -110,12 +138,19 @@ class AuthViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             repo.updatePassword(currentPassword, newPassword).fold(
                 onSuccess = { _uiState.value = _uiState.value.copy(isLoading = false, successMessage = "Пароль изменён") },
-                onFailure = { _uiState.value = _uiState.value.copy(isLoading = false, error = friendlyError(it.message)) }
+                onFailure = {
+                    crashlytics.recordException("updatePassword", it)
+                    _uiState.value = _uiState.value.copy(isLoading = false, error = friendlyError(it.message))
+                }
             )
         }
     }
 
-    fun signOut() = repo.signOut()
+    fun signOut() {
+        crashlytics.clearUserId()
+        repo.signOut()
+    }
+
     fun clearError() { _uiState.value = _uiState.value.copy(error = null) }
     fun clearSuccess() { _uiState.value = _uiState.value.copy(successMessage = null) }
 

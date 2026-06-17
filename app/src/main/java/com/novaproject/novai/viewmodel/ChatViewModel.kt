@@ -8,6 +8,8 @@ import com.novaproject.novai.data.model.Message
 import com.novaproject.novai.data.model.MessageSearchResult
 import com.novaproject.novai.data.repository.AuthRepository
 import com.novaproject.novai.data.repository.ChatRepository
+import com.novaproject.novai.util.AnalyticsHelper
+import com.novaproject.novai.util.CrashlyticsHelper
 import com.novaproject.novai.util.NetworkMonitor
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -53,6 +55,8 @@ data class SearchUiState(
 class ChatViewModel @Inject constructor(
     private val repo: ChatRepository,
     private val authRepo: AuthRepository,
+    private val analytics: AnalyticsHelper,
+    private val crashlytics: CrashlyticsHelper,
     networkMonitor: NetworkMonitor
 ) : ViewModel() {
 
@@ -87,8 +91,6 @@ class ChatViewModel @Inject constructor(
                         convsJob?.cancel(); settingsJob?.cancel()
                         _convState.value = ConversationsUiState()
                         currentSettings = AISettings()
-                        // Vuln-3: clear HTTP response cache on logout so cached AI
-                        // replies from one account are never served to another.
                         repo.clearCache()
                     }
                 }
@@ -100,9 +102,6 @@ class ChatViewModel @Inject constructor(
         convsJob = viewModelScope.launch {
             try {
                 repo.conversationsFlow().collect { convs ->
-                    // Merge in-memory pin states to guard against the race where
-                    // the Firestore listener fires before a pinConversation write
-                    // has been confirmed, which would silently drop a pin.
                     val pendingPins = _convState.value.conversations
                         .filter { it.isPinned }.map { it.id }.toSet()
                     val merged = convs.map { c ->
@@ -111,6 +110,7 @@ class ChatViewModel @Inject constructor(
                     _convState.value = _convState.value.copy(conversations = merged, error = null)
                 }
             } catch (e: Exception) {
+                crashlytics.recordException("loadConversations", e)
                 val msg = e.message ?: "Ошибка загрузки"
                 _convState.value = _convState.value.copy(
                     error = if (msg.contains("PERMISSION_DENIED")) "Нет доступа к данным. Проверьте правила Firestore." else msg
@@ -135,8 +135,6 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    // ── Conversation / chat lifecycle ──────────────────────────────────────────
-
     fun openConversation(convId: String) {
         if (currentConvId == convId) return
         currentConvId = convId
@@ -157,6 +155,7 @@ class ChatViewModel @Inject constructor(
                     )
                 }
             } catch (e: Exception) {
+                crashlytics.recordException("openConversation", e)
                 _chatState.value = _chatState.value.copy(error = e.message ?: "Ошибка загрузки")
             }
         }
@@ -188,8 +187,6 @@ class ChatViewModel @Inject constructor(
         )
     }
 
-    // ── Full-text search ───────────────────────────────────────────────────────
-
     fun searchMessages(query: String) {
         _searchState.value = _searchState.value.copy(query = query)
         searchJob?.cancel()
@@ -198,8 +195,6 @@ class ChatViewModel @Inject constructor(
             return
         }
         searchJob = viewModelScope.launch {
-            // Bug-4: debounce — wait 300 ms after the user stops typing before
-            // hitting Firestore, so each keystroke doesn't spawn a full scan.
             kotlinx.coroutines.delay(300)
             _searchState.value = _searchState.value.copy(isSearching = true)
             val results = repo.searchMessages(query)
@@ -209,16 +204,16 @@ class ChatViewModel @Inject constructor(
 
     fun clearSearch() { searchJob?.cancel(); _searchState.value = SearchUiState() }
 
-    // ── Send / edit ────────────────────────────────────────────────────────────
-
     fun createNewConversation(onCreated: (String) -> Unit) {
         viewModelScope.launch {
             _convState.value = _convState.value.copy(isLoading = true, error = null)
             try {
                 val id = repo.createConversation()
+                analytics.logConversationCreated()
                 _convState.value = _convState.value.copy(isLoading = false)
                 onCreated(id)
             } catch (e: Exception) {
+                crashlytics.recordException("createNewConversation", e)
                 val msg = e.message ?: "Не удалось создать чат"
                 _convState.value = _convState.value.copy(
                     isLoading = false,
@@ -237,8 +232,10 @@ class ChatViewModel @Inject constructor(
                 repo.sendMessage(convId, text.trim(), _chatState.value.messages, currentSettings) { chunk ->
                     _chatState.update { it.copy(streamingContent = it.streamingContent + chunk) }
                 }
+                analytics.logMessageSent(currentSettings.customModel)
                 _chatState.value = _chatState.value.copy(isSending = false, streamingContent = "")
             } catch (e: Exception) {
+                crashlytics.recordException("sendMessage", e)
                 _chatState.value = _chatState.value.copy(
                     isSending = false, streamingContent = "",
                     error = e.message ?: "Ошибка отправки"
@@ -247,30 +244,31 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    fun regenerateLastResponse() {
+        val convId = currentConvId ?: return
+        if (_chatState.value.isSending) return
+        val messages = _chatState.value.messages
+        val lastAiIdx = messages.indexOfLast { it.role == "assistant" }
+        if (lastAiIdx < 0) return
+        val lastUserIdx = messages.subList(0, lastAiIdx).indexOfLast { it.role == "user" }
+        if (lastUserIdx < 0) return
+        val lastUserMsg = messages[lastUserIdx]
+        val historyBefore = if (lastUserIdx > 0) messages.subList(0, lastUserIdx) else emptyList()
+        viewModelScope.launch {
+            _chatState.value = _chatState.value.copy(isSending = true, error = null, streamingContent = "")
+            try {
+                repo.editMessage(convId, lastUserMsg.id, lastUserMsg.content, historyBefore, currentSettings) { chunk ->
+                    _chatState.update { it.copy(streamingContent = it.streamingContent + chunk) }
+                }
+                analytics.logMessageSent(currentSettings.customModel)
+                _chatState.value = _chatState.value.copy(isSending = false, streamingContent = "")
+            } catch (e: Exception) {
+                crashlytics.recordException("regenerateLastResponse", e)
+                _chatState.value = _chatState.value.copy(isSending = false, streamingContent = "", error = e.message ?: "Ошибка")
+            }
+        }
+    }
 
-      fun regenerateLastResponse() {
-          val convId = currentConvId ?: return
-          if (_chatState.value.isSending) return
-          val messages = _chatState.value.messages
-          val lastAiIdx = messages.indexOfLast { it.role == "assistant" }
-          if (lastAiIdx < 0) return
-          val lastUserIdx = messages.subList(0, lastAiIdx).indexOfLast { it.role == "user" }
-          if (lastUserIdx < 0) return
-          val lastUserMsg = messages[lastUserIdx]
-          val historyBefore = if (lastUserIdx > 0) messages.subList(0, lastUserIdx) else emptyList()
-          viewModelScope.launch {
-              _chatState.value = _chatState.value.copy(isSending = true, error = null, streamingContent = "")
-              try {
-                  repo.editMessage(convId, lastUserMsg.id, lastUserMsg.content, historyBefore, currentSettings) { chunk ->
-                      _chatState.update { it.copy(streamingContent = it.streamingContent + chunk) }
-                  }
-                  _chatState.value = _chatState.value.copy(isSending = false, streamingContent = "")
-              } catch (e: Exception) {
-                  _chatState.value = _chatState.value.copy(isSending = false, streamingContent = "", error = e.message ?: "Ошибка")
-              }
-          }
-      }
-  
     fun editMessage(fromMessageId: String, newText: String) {
         val convId = currentConvId ?: return
         if (newText.isBlank() || _chatState.value.isSending) return
@@ -282,8 +280,10 @@ class ChatViewModel @Inject constructor(
                 repo.editMessage(convId, fromMessageId, newText.trim(), before, currentSettings) { chunk ->
                     _chatState.update { it.copy(streamingContent = it.streamingContent + chunk) }
                 }
+                analytics.logMessageSent(currentSettings.customModel)
                 _chatState.value = _chatState.value.copy(isSending = false, streamingContent = "")
             } catch (e: Exception) {
+                crashlytics.recordException("editMessage", e)
                 _chatState.value = _chatState.value.copy(
                     isSending = false, streamingContent = "",
                     error = e.message ?: "Ошибка редактирования"
@@ -291,8 +291,6 @@ class ChatViewModel @Inject constructor(
             }
         }
     }
-
-    // ── Conversations management ───────────────────────────────────────────────
 
     fun renameConversation(convId: String, newTitle: String) {
         viewModelScope.launch { try { repo.renameConversation(convId, newTitle) } catch (_: Exception) {} }
@@ -302,12 +300,7 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch { try { repo.deleteConversation(convId) } catch (_: Exception) {} }
     }
 
-    /**
-     * Toggles pin state with an optimistic UI update so the change is
-     * reflected immediately, then confirmed (or rolled back) by Firestore.
-     */
     fun pinConversation(convId: String, isPinned: Boolean) {
-        // Optimistic: update local state right away
         _convState.value = _convState.value.copy(
             conversations = _convState.value.conversations.map { c ->
                 if (c.id == convId) c.copy(isPinned = isPinned) else c
@@ -317,7 +310,6 @@ class ChatViewModel @Inject constructor(
             try {
                 repo.pinConversation(convId, isPinned)
             } catch (e: Exception) {
-                // Revert on failure
                 _convState.value = _convState.value.copy(
                     conversations = _convState.value.conversations.map { c ->
                         if (c.id == convId) c.copy(isPinned = !isPinned) else c
@@ -329,7 +321,6 @@ class ChatViewModel @Inject constructor(
     }
 
     fun addReaction(convId: String, msgId: String, isThumbsUp: Boolean) {
-        // Optimistic local toggle so the UI responds instantly
         _chatState.value = _chatState.value.copy(
             messages = _chatState.value.messages.map { msg ->
                 if (msg.id != msgId) return@map msg
@@ -344,6 +335,8 @@ class ChatViewModel @Inject constructor(
     }
 
     fun switchModel(model: String) {
+        analytics.logSettingsChanged("model")
+        crashlytics.setCustomKey("active_model", model)
         currentSettings = currentSettings.copy(customModel = model)
         _chatState.value = _chatState.value.copy(currentModel = model)
     }
@@ -360,8 +353,14 @@ class ChatViewModel @Inject constructor(
 
     fun deleteAccount(onSuccess: () -> Unit) {
         viewModelScope.launch {
-            try { repo.deleteAccount(); onSuccess() }
-            catch (e: Exception) { _convState.value = _convState.value.copy(error = e.message ?: "Ошибка удаления аккаунта") }
+            try {
+                repo.deleteAccount()
+                analytics.logAccountDeleted()
+                onSuccess()
+            } catch (e: Exception) {
+                crashlytics.recordException("deleteAccount", e)
+                _convState.value = _convState.value.copy(error = e.message ?: "Ошибка удаления аккаунта")
+            }
         }
     }
 

@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.novaproject.novai.data.model.AISettings
 import com.novaproject.novai.data.model.FREE_MODEL_LIST
 import com.novaproject.novai.data.repository.ChatRepository
+import com.novaproject.novai.util.AnalyticsHelper
+import com.novaproject.novai.util.CrashlyticsHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -18,13 +20,14 @@ data class SettingsUiState(
     val isSaving: Boolean = false,
     val saved: Boolean = false,
     val error: String? = null,
-    /** Which model's per-model prompt is currently being edited in the UI. */
     val promptEditModelId: String = ""
 )
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
-    private val repo: ChatRepository
+    private val repo: ChatRepository,
+    private val analytics: AnalyticsHelper,
+    private val crashlytics: CrashlyticsHelper
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SettingsUiState())
@@ -33,7 +36,7 @@ class SettingsViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             repo.settingsFlow()
-                .catch { /* keep current state */ }
+                .catch { }
                 .collect { settings ->
                     if (settings != _state.value.settings && !_state.value.isSaving) {
                         _state.value = _state.value.copy(settings = settings)
@@ -46,29 +49,23 @@ class SettingsViewModel @Inject constructor(
         _state.value = _state.value.copy(settings = block(_state.value.settings), saved = false)
     }
 
-    fun updateTemperature(v: Float) = update { copy(temperature = v) }
-    fun updateMaxTokens(v: Int) = update { copy(maxTokens = v) }
-    fun updateTopP(v: Float) = update { copy(topP = v) }
-    fun updateFrequencyPenalty(v: Float) = update { copy(frequencyPenalty = v) }
-    fun updatePresencePenalty(v: Float) = update { copy(presencePenalty = v) }
-    fun updateSendHistory(v: Boolean) = update { copy(sendHistory = v) }
+    fun updateTemperature(v: Float) { analytics.logSettingsChanged("temperature"); update { copy(temperature = v) } }
+    fun updateMaxTokens(v: Int) { analytics.logSettingsChanged("max_tokens"); update { copy(maxTokens = v) } }
+    fun updateTopP(v: Float) { analytics.logSettingsChanged("top_p"); update { copy(topP = v) } }
+    fun updateFrequencyPenalty(v: Float) { analytics.logSettingsChanged("frequency_penalty"); update { copy(frequencyPenalty = v) } }
+    fun updatePresencePenalty(v: Float) { analytics.logSettingsChanged("presence_penalty"); update { copy(presencePenalty = v) } }
+    fun updateSendHistory(v: Boolean) { analytics.logSettingsChanged("send_history"); update { copy(sendHistory = v) } }
     fun updateSystemPromptOverride(v: String) = update { copy(systemPromptOverride = v) }
-    fun updateCustomModel(v: String) = update { copy(customModel = v) }
+    fun updateCustomModel(v: String) { analytics.logSettingsChanged("custom_model"); update { copy(customModel = v) } }
     fun updateOpenRouterToken(v: String) = update { copy(openRouterToken = v) }
-    fun updateAiName(v: String) = update { copy(aiName = v) }
+    fun updateAiName(v: String) { analytics.logSettingsChanged("ai_name"); update { copy(aiName = v) } }
     fun updateAiAvatarEmoji(v: String) = update { copy(aiAvatarEmoji = v) }
-    fun updateAccentColor(v: String) = update { copy(accentColor = v) }
+    fun updateAccentColor(v: String) { analytics.logSettingsChanged("accent_color"); update { copy(accentColor = v) } }
 
-    /** Set which model's prompt is being edited in the settings UI. */
     fun setPromptEditModel(modelId: String) {
         _state.value = _state.value.copy(promptEditModelId = modelId)
     }
 
-    /**
-     * Update the system prompt for a specific model.
-     * Uses [FREE_MODEL_LIST] IDs plus custom model IDs as keys.
-     * An empty [prompt] removes the entry from the map.
-     */
     fun addCustomModel(modelId: String) = update {
         val id = modelId.trim()
         if (id.isNotBlank() && !customModels.contains(id)) copy(customModels = customModels + id) else this
@@ -89,8 +86,10 @@ class SettingsViewModel @Inject constructor(
             _state.value = _state.value.copy(isSaving = true, error = null)
             try {
                 repo.saveSettings(_state.value.settings)
+                crashlytics.setCustomKey("active_model", _state.value.settings.customModel)
                 _state.value = _state.value.copy(isSaving = false, saved = true)
             } catch (e: Exception) {
+                crashlytics.recordException("saveSettings", e)
                 _state.value = _state.value.copy(isSaving = false, error = e.message ?: "Ошибка")
             }
         }
