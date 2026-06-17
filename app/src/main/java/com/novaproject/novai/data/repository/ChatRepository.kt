@@ -136,19 +136,30 @@ package com.novaproject.novai.data.repository
               firestoreListener?.remove()
               firestoreListener = settingsRef(userId).addSnapshotListener { snap, err ->
                   if (err != null) return@addSnapshotListener
-                  val base = snap?.toObject(AISettings::class.java) ?: AISettings()
+                  try {
+                      val base = snap?.toObject(AISettings::class.java) ?: AISettings()
 
-                  // One-time migration: recover legacy token stored in Firestore before this fix.
-                  if (tokenStore.getToken().isEmpty()) {
-                      val legacyToken = snap?.getString("openRouterToken").orEmpty()
-                      if (legacyToken.isNotEmpty()) {
-                          tokenStore.saveToken(legacyToken)
-                          snap?.reference?.update("openRouterToken",
-                              com.google.firebase.firestore.FieldValue.delete())
+                      // One-time migration: recover legacy token stored in Firestore before this fix.
+                      val currentToken = try { tokenStore.getToken() } catch (_: Exception) { "" }
+                      if (currentToken.isEmpty()) {
+                          val legacyToken = snap?.getString("openRouterToken").orEmpty()
+                          if (legacyToken.isNotEmpty()) {
+                              try { tokenStore.saveToken(legacyToken) } catch (_: Exception) {}
+                              snap?.reference?.update("openRouterToken",
+                                  com.google.firebase.firestore.FieldValue.delete())
+                          }
                       }
-                  }
 
-                  trySend(base.copy(openRouterToken = tokenStore.getToken()))
+                      val token = try { tokenStore.getToken() } catch (_: Exception) { "" }
+                      trySend(base.copy(
+                          openRouterToken = token,
+                          customModels = (base.customModels as? List<String>).orEmpty(),
+                          modelPrompts = (base.modelPrompts as? Map<String, String>).orEmpty()
+                      ))
+                  } catch (e: Exception) {
+                      android.util.Log.e("ChatRepository", "settingsFlow listener error", e)
+                      trySend(AISettings())
+                  }
               }
           }
 
@@ -414,7 +425,12 @@ package com.novaproject.novai.data.repository
           val userId = uid ?: return AISettings()
           return try {
               val base = settingsRef(userId).get().await().toObject(AISettings::class.java) ?: AISettings()
-              base.copy(openRouterToken = tokenStore.getToken())
+              val token = try { tokenStore.getToken() } catch (_: Exception) { "" }
+              base.copy(
+                  openRouterToken = token,
+                  customModels = (base.customModels as? List<String>).orEmpty(),
+                  modelPrompts = (base.modelPrompts as? Map<String, String>).orEmpty()
+              )
           }
           catch (_: Exception) { AISettings() }
       }
