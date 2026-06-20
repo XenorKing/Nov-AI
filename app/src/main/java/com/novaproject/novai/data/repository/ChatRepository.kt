@@ -319,8 +319,23 @@ package com.novaproject.novai.data.repository
                       val response = httpClient.newCall(httpRequest).execute()
                       val code = response.code
                       when {
-                          code == 429 && retries < 1 -> { response.close(); retries++; delay(3000L) }
-                          code == 429 -> { response.close(); throw Exception("Превышен лимит запросов. Попробуйте чуть позже.") }
+                          code == 429 -> {
+                              val body429 = response.body?.string() ?: ""; response.close()
+                              val isOurQuota = runCatching {
+                                  com.google.gson.JsonParser.parseString(body429).asJsonObject
+                                      .get("quota")?.let { !it.isJsonNull } ?: false
+                              }.getOrDefault(false)
+                              if (isOurQuota) {
+                                  throw Exception("Дневной лимит исчерпан (10 запросов). Обновится завтра.")
+                              }
+                              if (retries < 3) {
+                                  retries++
+                                  val waitSec = when (retries) { 1 -> 5L; 2 -> 15L; else -> 30L }
+                                  delay(waitSec * 1000L)
+                              } else {
+                                  throw Exception("Бесплатные модели перегружены. Попробуйте через минуту или выберите другую модель.")
+                              }
+                          }
                           code !in 200..299 -> {
                               val body = response.body?.string() ?: ""; response.close()
                               val detail = runCatching {
