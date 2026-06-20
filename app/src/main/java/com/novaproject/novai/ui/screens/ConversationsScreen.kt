@@ -132,6 +132,14 @@ fun ConversationsScreen(
                             Icon(Icons.Default.Settings, "Настройки", tint = NovTextSecondary, modifier = Modifier.size(20.dp))
                         }
                     }
+                    IconButton(onClick = onProfile) {
+                        Box(
+                            modifier = Modifier.size(38.dp).clip(androidx.compose.foundation.shape.CircleShape).background(accent),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(userInitial, color = NovDark, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, fontSize = 16.sp)
+                        }
+                    }
                 }
             }
 
