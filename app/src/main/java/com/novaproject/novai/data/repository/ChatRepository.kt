@@ -45,7 +45,7 @@ package com.novaproject.novai.data.repository
   import javax.inject.Inject
   import javax.inject.Singleton
 
-  private const val DEFAULT_MODEL_ID  = "nex-agi/nex-n2-pro:free"
+  private const val DEFAULT_MODEL_ID  = "meta-llama/llama-3.3-70b-instruct:free"
   private const val CACHE_MAX_SIZE    = 50
   private const val WORKER_URL        = "https://novai-proxy.xenortvin.workers.dev/chat"
   private const val WORKER_QUOTA_URL  = "https://novai-proxy.xenortvin.workers.dev/quota"
